@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "factorio.fullname" . }}
+  labels:
+    {{- include "factorio.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "factorio.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate  # So that it first stops the server (saves) and afterwards recreates with that save in the pvc
+  template:
+    metadata:
+      labels:
+        {{- include "factorio.selectorLabels" . | nindent 8 }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "factorio.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      containers:
+        {{- if .Values.s3Backups }}
+        - name: {{ .Chart.Name }}-backups
+          image: schickling/s3cmd
+          command:
+            - /s3init.sh
+          volumeMounts:
+            - mountPath: "/s3/saves"
+              name: saves
+            - mountPath: "/s3/mods"
+              name: mods
+            - mountPath: "/root/.s3cfg"
+              name: s3cfg
+              subPath: .s3cfg
+            - mountPath: "/s3init.sh"
+              name: s3init
+              subPath: s3init.sh
+        {{- end }}
+
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.version }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: factorio
+              containerPort: {{ .Values.factorio.port | default 34197 }}
+              protocol: UDP
+            - name: rcon
+              containerPort: {{ .Values.factorio.rconPort | default 27015 }}
+              protocol: TCP
+#          command:
+#            - sleep
+#            - "3600"
+          env:
+            - name: ENABLE_SERVER_LOAD_LATEST
+              value: "{{ .Values.factorio.enableServerLoadLatest | default true }}"
+            - name: SAVE_NAME
+              value: "{{ .Values.factorio.saveName }}"
+            - name: UPDATE_MODS_ON_START  #TODO: false not working
+              value: "{{ .Values.factorio.updateModsOnStart | default false }}"
+            - name: GENERATE_NEW_SAVE
+              value: "{{ .Values.factorio.generateNewSave | default false }}"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: "/factorio/saves"
+              name: saves
+            - mountPath: "/factorio/mods"
+              name: mods
+            - mountPath: "/factorio/scenarios"
+              name: scenarios
+            - mountPath: "/factorio/config"
+              name: config
+            {{- if .Values.factorio.factorioComToken }}
+            - mountPath: "/run/secrets/token"
+              name: secrets
+              subPath: token
+            - mountPath: "/run/secrets/username"
+              name: secrets
+              subPath: username
+            {{- end }}
+      volumes:
+        - name: saves
+          persistentVolumeClaim:
+            claimName: {{ include "factorio.fullname" . }}-saves
+        - name: mods
+          persistentVolumeClaim:
+            claimName: {{ include "factorio.fullname" . }}-mods
+        - name: scenarios
+          persistentVolumeClaim:
+            claimName: {{ include "factorio.fullname" . }}-scenarios
+        - name: config
+          configMap:
+            name: {{ include "factorio.fullname" . }}-config
+        {{- if .Values.s3Backups }}
+        - name: s3cfg
+          configMap:
+            name: {{ include "factorio.fullname" . }}-s3cfg
+        - name: s3init
+          configMap:
+            name: {{ include "factorio.fullname" . }}-s3init
+            defaultMode: 0744
+        {{- end }}
+        - name: secrets
+          secret:
+            secretName: {{ include "factorio.fullname" . }}-secrets
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

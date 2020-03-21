@@ -1,0 +1,109 @@
+# Default values for factorio.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: factoriotools/factorio
+  version: 0.18.14
+  pullPolicy: IfNotPresent
+
+# Enable to sync all saves to s3
+# s3Backups:
+#   schedule: "@every 30m"
+#   bucket: "factorio/" # without the s3://
+#   hostBase: "s3.your-server.tld"
+#   hostBucket: "%(bucket).s3.your-server.tld"
+#   accessKey: AWS_ACCESS_KEY
+#   secretKey: AWS_SECRET_KEY
+
+factorio:
+  port: "34197"
+  rconPort: "27015"
+
+  mapgensettings: []
+  mapsettings: []
+  adminlist: []
+  banlist: []
+  whitelist: []
+  serversettings: {}
+
+  factorioComUsername: ""
+  factorioComToken: ""
+  rconPassword: ""
+
+  enableServerLoadLatest: "true"
+  saveName: ""  # disable LoadLatest for this
+  updateModsOnStart: ""
+  generateNewSave: "false"
+
+persistence:
+  storageClass: ""
+  saves:
+    size: 1Gi
+  scenarios:
+    size: 1Gi
+  mods:
+    size: 1Gi
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext:
+  # Run as 845 (factorio), otherwise the image wants to chown our configmaps and fails
+  runAsUser: 845
+  runAsGroup: 845
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: NodePort
+  # port: 34197
+  port: 32222 # NodePort must be inside (30000-32767) -> Open this port on the node(s)
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

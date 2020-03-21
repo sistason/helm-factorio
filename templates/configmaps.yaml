@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "factorio.fullname" . }}-config
+  labels:
+    {{- include "factorio.labels" . | nindent 4 }}
+data:
+  map-gen-settings.json:
+    {{ .Values.factorio.mapgensettings | toJson | quote }}
+
+  map-settings.json:
+    {{ .Values.factorio.mapsettings | toJson | quote }}
+
+  server-adminlist.json:
+    {{ .Values.factorio.adminlist | toJson | quote }}
+
+  server-banlist.json:
+    {{ .Values.factorio.banlist | toJson | quote }}
+
+  server-whitelist.json:
+    {{ .Values.factorio.whitelist | toJson | quote }}
+
+  server-settings.json:
+    {{ .Values.factorio.serversettings | toJson | quote }}
+
+  rconpw: {{ .Values.factorio.rconPassword | default (randAlphaNum 15) | b64enc }}
+
+{{- if .Values.s3Backups }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "factorio.fullname" . }}-s3cfg
+  labels:
+    {{- include "factorio.labels" . | nindent 4 }}
+data:
+  .s3cfg: |
+    [default]
+    access_key = {{ .Values.s3Backups.accessKey }}
+    secret_key = {{ .Values.s3Backups.secretKey }}
+    use_https = True
+    check_ssl_certificate = True
+    check_ssl_hostname = False
+
+    host_base = {{ .Values.s3Backups.hostBase }}
+    host_bucket = {{ .Values.s3Backups.hostBucket }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "factorio.fullname" . }}-s3init
+  labels:
+    {{- include "factorio.labels" . | nindent 4 }}
+data:
+  s3init.sh: |
+    #!/bin/sh
+    rm -r /s3/saves/lost+found /s3/mods/lost+found
+    chown -R 845:845 /s3/*
+
+    if [ "$(ls -A /s3/saves/)" ]; then
+      echo "Saves available, backupping..."
+      s3cmd sync --delete-removed /s3/saves s3://{{ .Values.s3Backups.bucket }}
+    else
+      echo "No saves available, restoring from backup..."
+      s3cmd get --recursive s3://{{ .Values.s3Backups.bucket | clean }}/saves /s3/
+    fi
+    if [ "$(ls -A /s3/mods/)" ]; then
+      echo "Mods available, backupping..."
+      s3cmd sync --delete-removed /s3/mods s3://{{ .Values.s3Backups.bucket }}
+    else
+      echo "No mods available, restoring from backup..."
+      s3cmd get --recursive s3://{{ .Values.s3Backups.bucket | clean }}/mods /s3/
+    fi
+
+    if [ ! -f /init-ran ]; then
+      touch /init-ran
+      exec go-cron "{{ .Values.s3Backups.schedule }}" $0
+    fi
+
+{{- end }}
